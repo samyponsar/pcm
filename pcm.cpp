@@ -8,12 +8,14 @@
 #include <cmath>
 #include <string>
 #include <limits>
-#include <algorithm>
+#include <cassert>
 
 
 using namespace std;
 
+const int CHANNELS = 1;
 const int SAMPLERATE = 44100;
+const int BITRATE = 16;
 
 typedef struct WAV_HEADER {
     /* RIFF Chunk Descriptor */
@@ -25,11 +27,11 @@ typedef struct WAV_HEADER {
     uint32_t Subchunk1Size = 16;           // Size of the fmt chunk
     uint16_t AudioFormat = 1; // Audio format 1=PCM,6=mulaw,7=alaw,     257=IBM
     // Mu-Law, 258=IBM A-Law, 259=ADPCM
-    uint16_t NumOfChan = 1;   // Number of channels 1=Mono 2=Stereo
+    uint16_t NumOfChan = CHANNELS;   // Number of channels 1=Mono 2=Stereo
     uint32_t SamplesPerSec = SAMPLERATE;   // Sampling Frequency in Hz
-    uint32_t bytesPerSec = SAMPLERATE * 2; // bytes per second
-    uint16_t blockAlign = 2;          // 2=16-bit mono, 4=16-bit stereo
-    uint16_t bitsPerSample = 16;      // Number of bits per sample
+    uint32_t bytesPerSec = SAMPLERATE * (BITRATE/8); // bytes per second
+    uint16_t blockAlign = CHANNELS*(BITRATE/8);          // 2=16-bit mono, 4=16-bit stereo
+    uint16_t bitsPerSample = BITRATE;      // Number of bits per sample
     /* "data" sub-chunk */
     uint8_t Subchunk2ID[4] = { 'd', 'a', 't', 'a' }; // "data"  string
     uint32_t Subchunk2Size;                        // Sampled data length
@@ -63,19 +65,21 @@ int makewav(string filename) {
 
 
 vector<double> sine(double seconds, double frequency, double amplitude) {
-	int length = (int) (seconds * SAMPLERATE);
-	vector<double> result;
-	for (int x = 0; x < length; x ++) {
-        double y = (x * 2 * M_PI * frequency) / SAMPLERATE;
-		double samplevalue = sin(y) * amplitude;
-		result.push_back(samplevalue);
-	}
-	return result;
+    int length = (int) (seconds * SAMPLERATE);
+    double period = (1/frequency) * SAMPLERATE;
+    vector<double> result;
+    for (int x = 0; x < length; x ++) {
+        assert ((x * 2 * M_PI * frequency) < numeric_limits<double>::infinity());
+        assert ((x * 2 * M_PI * frequency) >= 0);
+        double samplevalue = sin((x*2*M_PI)/period) * amplitude;
+        result.push_back(samplevalue);
+    }
+    return result;
 }
 
 vector<double> square(double seconds, double frequency, double amplitude) {
     vector<double> result = sine(seconds, frequency, 1);
-    for (int x = 0; x < size(result); x++) {
+    for (int x = 0; x < result.size(); x++) {
         if (result[x] >= 0) {
             result[x] = amplitude;
         }
@@ -88,13 +92,33 @@ vector<double> square(double seconds, double frequency, double amplitude) {
 
 
 vector<double> triangle(double seconds, double frequency, double amplitude) {
-    int length = (int)(seconds * SAMPLERATE);
+    int length = (int) (seconds * SAMPLERATE);
+    double period = (1/frequency) * SAMPLERATE;
     vector<double> result;
-    for (int x = 0; x < length; x++) {
-        double samplevalue = abs(fmod(x , (1/frequency)) - amplitude);
+    for (int x = 0; x < length; x ++) {
+        double samplevalue = (4*amplitude/period)*abs(fmod((x+period-(period/4)),period)-(period/2))-amplitude;
         result.push_back(samplevalue);
     }
     return result;
+}
+
+vector<double> saw(double seconds, double frequency, double amplitude) {
+    int length = (int) (seconds * SAMPLERATE);
+    double period = (1/frequency) * SAMPLERATE;
+    vector<double> result;
+    for (int x = 0; x < length; x ++) {
+        double samplevalue = (((fmod(x, period))/period)-0.5)*2*amplitude;
+        result.push_back(samplevalue);
+    }
+    return result;
+}
+
+vector<double> sawr(double seconds, double frequency, double amplitude) {
+    vector<double> result = saw(seconds, frequency, amplitude);
+    for (int x = 0; x < result.size(); x++) {
+        result[x] = -result[x];
+    }
+    return result;     
 }
 
 int main() {
@@ -121,11 +145,11 @@ int main() {
     }
     ofstream out("temp.bin", ios::binary);
 
-    cout << "Waveform mode? (1=sine | 2=triangle | 3=square) ";
-    while ( !(cin >> mode) || !(mode == 1 || mode == 2 || mode == 3) ) {
+    cout << "Waveform mode? (1=sine | 2=triangle | 3=square | 4=saw | 5=reverse saw) ";
+    while ( !(cin >> mode) || !(mode == 1 || mode == 2 || mode == 3 || mode == 4 || mode == 5) ) {
         cin.clear();
         cin.ignore(1000, '\n');
-        cout << "Invalid input.\nWaveform mode? (1=sine | 2=triangle | 3=square) ";
+        cout << "Invalid input.\nWaveform mode? (1=sine | 2=triangle | 3=square | 4=saw | 5=reverse saw) ";
     }
     vector<double> data;
     switch (mode) {
@@ -137,6 +161,12 @@ int main() {
             break;
         case 3:
             data = square(seconds, frequency, amplitude);
+            break;
+        case 4:
+            data = saw(seconds, frequency, amplitude);
+            break;
+        case 5:
+            data = sawr(seconds, frequency, amplitude);
             break;
     }
 
