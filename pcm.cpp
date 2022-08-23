@@ -1,14 +1,19 @@
 // refer to http://www.topherlee.com/software/pcm-tut-wavformat.html
 
+#define _USE_MATH_DEFINES
+
 #include <fstream>
 #include <iostream>
 #include <vector>
 #include <cmath>
 #include <string>
+#include <limits>
+#include <algorithm>
+
 
 using namespace std;
 
-const double pi = 3.14159265358979323846;
+const int SAMPLERATE = 44100;
 
 typedef struct WAV_HEADER {
     /* RIFF Chunk Descriptor */
@@ -21,8 +26,8 @@ typedef struct WAV_HEADER {
     uint16_t AudioFormat = 1; // Audio format 1=PCM,6=mulaw,7=alaw,     257=IBM
     // Mu-Law, 258=IBM A-Law, 259=ADPCM
     uint16_t NumOfChan = 1;   // Number of channels 1=Mono 2=Stereo
-    uint32_t SamplesPerSec = 44100;   // Sampling Frequency in Hz
-    uint32_t bytesPerSec = 44100 * 2; // bytes per second
+    uint32_t SamplesPerSec = SAMPLERATE;   // Sampling Frequency in Hz
+    uint32_t bytesPerSec = SAMPLERATE * 2; // bytes per second
     uint16_t blockAlign = 2;          // 2=16-bit mono, 4=16-bit stereo
     uint16_t bitsPerSample = 16;      // Number of bits per sample
     /* "data" sub-chunk */
@@ -37,7 +42,6 @@ int makewav(string filename) {
     in.seekg(0, in.end);
     uint32_t fsize = in.tellg();
     in.seekg(0, in.beg);
-    cout << fsize << "\n";
     
     wav_hdr wav;
     wav.ChunkSize = (fsize + sizeof(wav_hdr) - 8);
@@ -59,17 +63,42 @@ int makewav(string filename) {
 
 
 vector<double> sine(double seconds, double frequency, double amplitude) {
-	int length = (int) (seconds * 44100);
+	int length = (int) (seconds * SAMPLERATE);
 	vector<double> result;
-	for (double x = 0; x < length; x ++) {
-		double samplevalue = sin((x * 2 * pi * frequency) / 44100) * amplitude;
+	for (int x = 0; x < length; x ++) {
+        double y = (x * 2 * M_PI * frequency) / SAMPLERATE;
+		double samplevalue = sin(y) * amplitude;
 		result.push_back(samplevalue);
 	}
 	return result;
 }
 
+vector<double> square(double seconds, double frequency, double amplitude) {
+    vector<double> result = sine(seconds, frequency, 1);
+    for (int x = 0; x < size(result); x++) {
+        if (result[x] >= 0) {
+            result[x] = amplitude;
+        }
+        else {
+            result[x] = -amplitude;
+        }
+    }
+    return result;
+}
+
+
+vector<double> triangle(double seconds, double frequency, double amplitude) {
+    int length = (int)(seconds * SAMPLERATE);
+    vector<double> result;
+    for (int x = 0; x < length; x++) {
+        double samplevalue = abs(fmod(x , (1/frequency)) - amplitude);
+        result.push_back(samplevalue);
+    }
+    return result;
+}
 
 int main() {
+    int mode;
     double seconds, frequency, amplitude;
     string filename;
     cout << "Duration? (in seconds) ";
@@ -79,7 +108,7 @@ int main() {
       cout << "Invalid input.\nDuration? (in seconds) ";
     }
     cout << "Frequency? (Hz) ";
-    while(!(cin >> frequency) || frequency < 0) {
+    while(!(cin >> frequency) || frequency <= 0) {
       cin.clear();
       cin.ignore(1000, '\n');
       cout << "Invalid input.\nFrequency? (Hz) ";
@@ -90,21 +119,40 @@ int main() {
       cin.ignore(1000, '\n');
       cout << "Invalid input.\nAmplitude? (0-1) ";
     }
-    cout << "File name? ";
-    while(!(cin >> filename)) {
-      cin.clear();
-      cin.ignore(1000, '\n');
-      cout << "Invalid input.\nFile name? ";
-    }
-    filename += ".wav";
     ofstream out("temp.bin", ios::binary);
-    vector<double> data = sine(seconds, frequency, amplitude);
+
+    cout << "Waveform mode? (1=sine | 2=triangle | 3=square) ";
+    while ( !(cin >> mode) || !(mode == 1 || mode == 2 || mode == 3) ) {
+        cin.clear();
+        cin.ignore(1000, '\n');
+        cout << "Invalid input.\nWaveform mode? (1=sine | 2=triangle | 3=square) ";
+    }
+    vector<double> data;
+    switch (mode) {
+        case 1:
+            data = sine(seconds, frequency, amplitude);
+            break;
+        case 2:
+            data = triangle(seconds, frequency, amplitude);
+            break;
+        case 3:
+            data = square(seconds, frequency, amplitude);
+            break;
+    }
+
     for (double i: data) {
       int16_t j = (int16_t)(i*32767);  
       out.write(reinterpret_cast<char*>(&j), sizeof(int16_t));
     }
     out.close();
-    
+
+    cout << "File name? ";
+    while (!(cin >> filename)) {
+        cin.clear();
+        cin.ignore(1000, '\n');
+        cout << "Invalid input.\nFile name? ";
+    }
+    filename += ".wav";
     makewav(filename);
     remove("temp.bin");
     return 0;
