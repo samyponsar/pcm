@@ -1,6 +1,3 @@
-// author: fangjun kuang <csukuangfj at gmail dot com>
-// date: Apr. 22, 2019
-
 // refer to http://www.topherlee.com/software/pcm-tut-wavformat.html
 
 #include <fstream>
@@ -8,8 +5,6 @@
 #include <vector>
 #include <cmath>
 #include <string>
-#include <filesystem>
-#include <sys/stat.h>
 
 using namespace std;
 
