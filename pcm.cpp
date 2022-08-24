@@ -17,7 +17,7 @@ const int CHANNELS = 1;
 const int SAMPLERATE = 44100;
 const int BITRATE = 16;
 
-vector<double> data; //raw PCM data
+vector<double> audiodata; //raw PCM data
 
 typedef struct WAV_HEADER {
     /* RIFF Chunk Descriptor */
@@ -41,7 +41,7 @@ typedef struct WAV_HEADER {
 
 int makewav(string filename) {
     
-    uint32_t datasize = data.size()*(BITRATE/8);
+    uint32_t datasize = (uint32_t)(audiodata.size()*(BITRATE/8));
     wav_hdr wav;
     wav.ChunkSize = (datasize + sizeof(wav_hdr) - 8);
     wav.Subchunk2Size = datasize;
@@ -51,9 +51,9 @@ int makewav(string filename) {
     assert (sizeof(wav) == 44); //check header length
     out.write((char *)&wav, sizeof(wav)); //write header
     
-    for (double i: data) {
+    for (double i: audiodata) {
       assert (-1 <= i <= 1);
-      int16_t j = i*INT16_MAX; //map to 16bit range but preserve symmetry (min value = -32767)
+      int16_t j = (int16_t)(i*INT16_MAX); //map to 16bit range but preserve symmetry (min value = -32767)
       out.write((char *)&j, sizeof(int16_t)); //write data
     }
     if (out.fail()){
@@ -76,8 +76,8 @@ vector<double> sine(double seconds, double frequency, double amplitude) {
 
 vector<double> square(double seconds, double frequency, double amplitude) {
     vector<double> result = sine(seconds, frequency, 1);
-    for (int x = 0; x < result.size(); x++) { 
-        result[x] = ((result[x] >= 0) - (result[x] < 0)) * amplitude; //sign function, 0 becomes +1
+    for (double i: audiodata) { 
+        i = ((i >= 0) - (i < 0)) * amplitude; //sign function, 0 becomes +1
     }
     return result;
 }
@@ -106,8 +106,8 @@ vector<double> saw(double seconds, double frequency, double amplitude) {
 
 vector<double> sawr(double seconds, double frequency, double amplitude) {
     vector<double> result = saw(seconds, frequency, amplitude);
-    for (int x = 0; x < result.size(); x++) {
-        result[x] = -result[x];
+    for (double i: audiodata) {
+        i = -i;
     }
     return result;     
 }
@@ -150,32 +150,37 @@ int main() {
     }
     switch (mode) {
         case 1:
-            data = sine(seconds, frequency, amplitude);
+            audiodata = sine(seconds, frequency, amplitude);
             break;
         case 2:
-            data = triangle(seconds, frequency, amplitude);
+            audiodata = triangle(seconds, frequency, amplitude);
             break;
         case 3:
-            data = square(seconds, frequency, amplitude);
+            audiodata = square(seconds, frequency, amplitude);
             break;
         case 4:
-            data = saw(seconds, frequency, amplitude);
+            audiodata = saw(seconds, frequency, amplitude);
             break;
         case 5:
-            data = sawr(seconds, frequency, amplitude);
+            audiodata = sawr(seconds, frequency, amplitude);
             break;
     }
     
     cout << "File name? ";
-    getline(cin, filename);
+    while (filename.length() == 0) {     
+	getline(cin, filename); 
+    }
     while (filename.length() > 100 || !(regex_match(filename, regex("[\\w\\-. ]+")))) {
+        filename.clear();
         cout << "Invalid input.\nFile name? ";
-        getline(cin, filename);
+        while (filename.length() == 0) {     
+	    getline(cin, filename); 
+        }
     }
     filename += ".wav";
     makewav(filename);
     
-    cout << "Success! Press Enter to exit.\n";
+    cout << "Success! Press Enter to exit.";
     getchar();
     return 0;
 }
