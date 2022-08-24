@@ -116,11 +116,11 @@ int main() {
     int mode;
     double seconds, frequency, amplitude;
     string filename;
-    cout << "Duration? (in seconds) ";
+    cout << "Duration? (seconds) ";
     while(!(cin >> seconds) || seconds < 0 || seconds > 1000000) {
         cin.clear();
         cin.ignore(1000, '\n');
-        cout << "Invalid input.\nDuration? (in seconds) ";
+        cout << "Invalid input.\nDuration? (seconds) ";
     }
     cout << "Frequency? (Hz) ";
     while(!(cin >> frequency) || frequency <= 0) {
