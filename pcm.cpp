@@ -76,7 +76,7 @@ vector<double> sine(double seconds, double frequency, double amplitude) {
 
 vector<double> square(double seconds, double frequency, double amplitude) {
     vector<double> result = sine(seconds, frequency, 1);
-    for (double i: audiodata) { 
+    for (double &i: result) { 
         i = ((i >= 0) - (i < 0)) * amplitude; //sign function, 0 becomes +1
     }
     return result;
@@ -106,7 +106,7 @@ vector<double> saw(double seconds, double frequency, double amplitude) {
 
 vector<double> sawr(double seconds, double frequency, double amplitude) {
     vector<double> result = saw(seconds, frequency, amplitude);
-    for (double i: audiodata) {
+    for (double &i: result) {
         i = -i;
     }
     return result;     
