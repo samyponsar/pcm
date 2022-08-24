@@ -9,13 +9,15 @@
 #include <string>
 #include <limits>
 #include <cassert>
-
+#include <regex>
 
 using namespace std;
 
 const int CHANNELS = 1;
 const int SAMPLERATE = 44100;
 const int BITRATE = 16;
+
+vector<double> data; //raw PCM data
 
 typedef struct WAV_HEADER {
     /* RIFF Chunk Descriptor */
@@ -38,39 +40,34 @@ typedef struct WAV_HEADER {
 } wav_hdr;
 
 int makewav(string filename) {
-    static_assert(sizeof(wav_hdr) == 44, "");
     
-    ifstream in("temp.bin", ios::binary);
-    in.seekg(0, in.end);
-    uint32_t fsize = in.tellg();
-    in.seekg(0, in.beg);
-    
+    uint32_t datasize = data.size()*(BITRATE/8);
     wav_hdr wav;
-    wav.ChunkSize = (fsize + sizeof(wav_hdr) - 8);
-    wav.Subchunk2Size = fsize;
+    wav.ChunkSize = (datasize + sizeof(wav_hdr) - 8);
+    wav.Subchunk2Size = datasize;
 
     ofstream out(filename, ios::binary);
-    out.write(reinterpret_cast<const char*>(&wav), sizeof(wav));
-
-    int8_t d;
-    for (uint32_t i = 0; i < fsize; ++i) {
-        in.read(reinterpret_cast<char*>(&d), sizeof(int8_t));
-        out.write(reinterpret_cast<char*>(&d), sizeof(int8_t));
+    
+    assert (sizeof(wav) == 44); //check header length
+    out.write((char *)&wav, sizeof(wav)); //write header
+    
+    for (double i: data) {
+      assert (-1 <= i <= 1);
+      int16_t j = i*INT16_MAX; //map to 16bit range but preserve symmetry (min value = -32767)
+      out.write((char *)&j, sizeof(int16_t)); //write data
     }
-    in.close();
+    if (out.fail()){
+        cout << "File write error!\n";
+    }
     out.close();
     return 0;
 }
-
-
 
 vector<double> sine(double seconds, double frequency, double amplitude) {
     int length = (int) (seconds * SAMPLERATE);
     double period = (1/frequency) * SAMPLERATE;
     vector<double> result;
     for (int x = 0; x < length; x ++) {
-        assert ((x * 2 * M_PI * frequency) < numeric_limits<double>::infinity());
-        assert ((x * 2 * M_PI * frequency) >= 0);
         double samplevalue = sin((x*2*M_PI)/period) * amplitude;
         result.push_back(samplevalue);
     }
@@ -79,17 +76,11 @@ vector<double> sine(double seconds, double frequency, double amplitude) {
 
 vector<double> square(double seconds, double frequency, double amplitude) {
     vector<double> result = sine(seconds, frequency, 1);
-    for (int x = 0; x < result.size(); x++) {
-        if (result[x] >= 0) {
-            result[x] = amplitude;
-        }
-        else {
-            result[x] = -amplitude;
-        }
+    for (int x = 0; x < result.size(); x++) { 
+        result[x] = ((result[x] >= 0) - (result[x] < 0)) * amplitude; //sign function, 0 becomes +1
     }
     return result;
 }
-
 
 vector<double> triangle(double seconds, double frequency, double amplitude) {
     int length = (int) (seconds * SAMPLERATE);
@@ -126,24 +117,30 @@ int main() {
     double seconds, frequency, amplitude;
     string filename;
     cout << "Duration? (in seconds) ";
-    while(!(cin >> seconds) || seconds < 0) {
-      cin.clear();
-      cin.ignore(1000, '\n');
-      cout << "Invalid input.\nDuration? (in seconds) ";
+    while(!(cin >> seconds) || seconds < 0 || seconds > 1000000) {
+        cin.clear();
+        cin.ignore(1000, '\n');
+        cout << "Invalid input.\nDuration? (in seconds) ";
     }
     cout << "Frequency? (Hz) ";
     while(!(cin >> frequency) || frequency <= 0) {
-      cin.clear();
-      cin.ignore(1000, '\n');
-      cout << "Invalid input.\nFrequency? (Hz) ";
+        cin.clear();
+        cin.ignore(1000, '\n');
+        cout << "Invalid input.\nFrequency? (Hz) ";
     }
+    if (frequency > SAMPLERATE/2) {
+        cout << "WARNING: Input too high, aliasing will occur.\n";
+    }
+    
     cout << "Amplitude? (0-1) ";
     while(!(cin >> amplitude) || amplitude < 0 || amplitude > 1) {
-      cin.clear();
-      cin.ignore(1000, '\n');
-      cout << "Invalid input.\nAmplitude? (0-1) ";
+        cin.clear();
+        cin.ignore(1000, '\n');
+        cout << "Invalid input.\nAmplitude? (0-1) ";
     }
-    ofstream out("temp.bin", ios::binary);
+    if (amplitude < 0.05) {
+        cout << "WARNING: Amplitude very low and dangerously close to noise floor.\n";
+    }
 
     cout << "Waveform mode? (1=sine | 2=triangle | 3=square | 4=saw | 5=reverse saw) ";
     while ( !(cin >> mode) || !(mode == 1 || mode == 2 || mode == 3 || mode == 4 || mode == 5) ) {
@@ -151,7 +148,6 @@ int main() {
         cin.ignore(1000, '\n');
         cout << "Invalid input.\nWaveform mode? (1=sine | 2=triangle | 3=square | 4=saw | 5=reverse saw) ";
     }
-    vector<double> data;
     switch (mode) {
         case 1:
             data = sine(seconds, frequency, amplitude);
@@ -169,21 +165,17 @@ int main() {
             data = sawr(seconds, frequency, amplitude);
             break;
     }
-
-    for (double i: data) {
-      int16_t j = (int16_t)(i*32767);  
-      out.write(reinterpret_cast<char*>(&j), sizeof(int16_t));
-    }
-    out.close();
-
+    
     cout << "File name? ";
-    while (!(cin >> filename)) {
-        cin.clear();
-        cin.ignore(1000, '\n');
+    getline(cin, filename);
+    while (filename.length() > 100 || !(regex_match(filename, regex("[\\w\\-. ]+")))) {
         cout << "Invalid input.\nFile name? ";
+        getline(cin, filename);
     }
     filename += ".wav";
     makewav(filename);
-    remove("temp.bin");
+    
+    cout << "Success! Press Enter to exit.\n";
+    getchar();
     return 0;
 }
