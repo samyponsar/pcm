@@ -10,6 +10,8 @@
 #include <limits>
 #include <cassert>
 #include <regex>
+#include <algorithm>
+#include <functional>
 
 using namespace std;
 
@@ -17,7 +19,7 @@ const int CHANNELS = 1;
 const int SAMPLERATE = 44100;
 const int BITRATE = 16;
 
-vector<double> audiodata; //raw PCM data
+vector<double> audioData; //final raw PCM data
 
 typedef struct WAV_HEADER {
     /* RIFF Chunk Descriptor */
@@ -39,85 +41,31 @@ typedef struct WAV_HEADER {
     uint32_t Subchunk2Size;                        // Sampled data length
 } wav_hdr;
 
-int makewav(string filename) {
-    
-    uint32_t datasize = (uint32_t)(audiodata.size()*(BITRATE/8));
-    wav_hdr wav;
-    wav.ChunkSize = (datasize + sizeof(wav_hdr) - 8);
-    wav.Subchunk2Size = datasize;
+class Osc{
 
-    ofstream out(filename, ios::binary);
-    
-    assert (sizeof(wav) == 44); //check header length
-    out.write((char *)&wav, sizeof(wav)); //write header
-    
-    for (double i: audiodata) {
-      assert (-1 <= i <= 1);
-      int16_t j = (int16_t)(i*INT16_MAX); //map to 16bit range but preserve symmetry (min value = -32767)
-      out.write((char *)&j, sizeof(int16_t)); //write data
-    }
-    if (out.fail()){
-        cout << "File write error!\n";
-    }
-    out.close();
-    return 0;
-}
+        int mode;
+        double duration, frequency, amplitude;
 
-vector<double> sine(double seconds, double frequency, double amplitude) {
-    int length = (int) (seconds * SAMPLERATE);
-    double period = (1/frequency) * SAMPLERATE;
-    vector<double> result;
-    for (int x = 0; x < length; x ++) {
-        double samplevalue = sin((x*2*M_PI)/period) * amplitude;
-        result.push_back(samplevalue);
-    }
-    return result;
-}
+    public:
+        vector<double> oscData;
 
-vector<double> square(double seconds, double frequency, double amplitude) {
-    vector<double> result = sine(seconds, frequency, 1);
-    for (double &i: result) { 
-        i = ((i >= 0) - (i < 0)) * amplitude; //sign function, 0 becomes +1
-    }
-    return result;
-}
+        void init();
+        vector<double> sine();
+        vector<double> triangle();
+        vector<double> square();
+        vector<double> saw();
+        vector<double> sawr();
+};
 
-vector<double> triangle(double seconds, double frequency, double amplitude) {
-    int length = (int) (seconds * SAMPLERATE);
-    double period = (1/frequency) * SAMPLERATE;
-    vector<double> result;
-    for (int x = 0; x < length; x ++) {
-        double samplevalue = (4*amplitude/period)*abs(fmod((x+period-(period/4)),period)-(period/2))-amplitude;
-        result.push_back(samplevalue);
+void Osc::init(){
+    cout << "Osc mode? (1=sine | 2=triangle | 3=square | 4=saw | 5=reverse saw) ";
+    while ( !(cin >> mode) || !(mode == 1 || mode == 2 || mode == 3 || mode == 4 || mode == 5) ) {
+        cin.clear();
+        cin.ignore(1000, '\n');
+        cout << "Invalid input.\nOsc mode? (1=sine | 2=triangle | 3=square | 4=saw | 5=reverse saw) ";
     }
-    return result;
-}
-
-vector<double> saw(double seconds, double frequency, double amplitude) {
-    int length = (int) (seconds * SAMPLERATE);
-    double period = (1/frequency) * SAMPLERATE;
-    vector<double> result;
-    for (int x = 0; x < length; x ++) {
-        double samplevalue = (((fmod(x, period))/period)-0.5)*2*amplitude;
-        result.push_back(samplevalue);
-    }
-    return result;
-}
-
-vector<double> sawr(double seconds, double frequency, double amplitude) {
-    vector<double> result = saw(seconds, frequency, amplitude);
-    for (double &i: result) {
-        i = -i;
-    }
-    return result;     
-}
-
-int main() {
-    int mode;
-    double seconds, frequency, amplitude;
-    string filename;
     cout << "Duration? (seconds) ";
-    while(!(cin >> seconds) || seconds < 0 || seconds > 1000000) {
+    while(!(cin >> duration) || duration < 0 || duration > 1000000) {
         cin.clear();
         cin.ignore(1000, '\n');
         cout << "Invalid input.\nDuration? (seconds) ";
@@ -131,41 +79,133 @@ int main() {
     if (frequency > SAMPLERATE/2) {
         cout << "WARNING: Input too high, aliasing will occur.\n";
     }
-    
-    cout << "Amplitude? (0-1) ";
-    while(!(cin >> amplitude) || amplitude < 0 || amplitude > 1) {
+    cout << "Amplitude? (0-100, 1 = 0dBFS) ";
+    while(!(cin >> amplitude) || amplitude < 0 || amplitude > 100) {
         cin.clear();
         cin.ignore(1000, '\n');
-        cout << "Invalid input.\nAmplitude? (0-1) ";
+        cout << "Invalid input.\nAmplitude? (0-100, 1 = 0dBFS) ";
     }
     if (amplitude < 0.05) {
         cout << "WARNING: Amplitude very low and dangerously close to noise floor.\n";
     }
 
-    cout << "Waveform mode? (1=sine | 2=triangle | 3=square | 4=saw | 5=reverse saw) ";
-    while ( !(cin >> mode) || !(mode == 1 || mode == 2 || mode == 3 || mode == 4 || mode == 5) ) {
-        cin.clear();
-        cin.ignore(1000, '\n');
-        cout << "Invalid input.\nWaveform mode? (1=sine | 2=triangle | 3=square | 4=saw | 5=reverse saw) ";
-    }
     switch (mode) {
         case 1:
-            audiodata = sine(seconds, frequency, amplitude);
+            oscData = sine();
             break;
         case 2:
-            audiodata = triangle(seconds, frequency, amplitude);
+            oscData = triangle();
             break;
         case 3:
-            audiodata = square(seconds, frequency, amplitude);
+            oscData = square();
             break;
         case 4:
-            audiodata = saw(seconds, frequency, amplitude);
+            oscData = saw();
             break;
         case 5:
-            audiodata = sawr(seconds, frequency, amplitude);
+            oscData = sawr();
             break;
     }
+}
+
+vector<double> Osc::sine() {
+    int length = (int) (duration * SAMPLERATE);
+    double period = (1/frequency) * SAMPLERATE;
+    vector<double> result;
+    for (int x = 0; x < length; x ++) {
+        double samplevalue = sin((x*2*M_PI)/period) * amplitude;
+        result.push_back(samplevalue);
+    }
+    return result;
+}
+
+vector<double> Osc::triangle() {
+    int length = (int) (duration * SAMPLERATE);
+    double period = (1/frequency) * SAMPLERATE;
+    vector<double> result;
+    for (int x = 0; x < length; x ++) {
+        double samplevalue = (4*amplitude/period)*abs(fmod((x+period-(period/4)),period)-(period/2))-amplitude;
+        result.push_back(samplevalue);
+    }
+    return result;
+}
+
+vector<double> Osc::square() {
+    int length = (int) (duration * SAMPLERATE);
+    double period = (1/frequency) * SAMPLERATE;
+    vector<double> result;
+    for (int x = 0; x < length; x ++) {
+        double samplevalue = sin((x*2*M_PI)/period);
+        samplevalue = ((samplevalue >= 0) - (samplevalue < 0)) * amplitude;
+        result.push_back(samplevalue);
+    }
+    return result;
+}
+
+vector<double> Osc::saw() {
+    int length = (int) (duration * SAMPLERATE);
+    double period = (1/frequency) * SAMPLERATE;
+    vector<double> result;
+    for (int x = 0; x < length; x ++) {
+        double samplevalue = (((fmod(x, period))/period)-0.5)*2*amplitude;
+        result.push_back(samplevalue);
+    }
+    return result;
+}
+
+vector<double> Osc::sawr() {
+    int length = (int) (duration * SAMPLERATE);
+    double period = (1/frequency) * SAMPLERATE;
+    vector<double> result;
+    for (int x = 0; x < length; x ++) {
+        double samplevalue = -(((fmod(x, period))/period)-0.5)*2*amplitude;
+        result.push_back(samplevalue);
+    }
+    return result;
+}
+
+int makewav(string filename) {
     
+    uint32_t datasize = (uint32_t)(audioData.size()*(BITRATE/8));
+    wav_hdr wav;
+    wav.ChunkSize = (datasize + sizeof(wav_hdr) - 8);
+    wav.Subchunk2Size = datasize;
+
+    ofstream out(filename, ios::binary);
+    
+    assert (sizeof(wav) == 44); //check header length
+    out.write((char *)&wav, sizeof(wav)); //write header
+    
+    for (double &i: audioData) {
+      int16_t j = (int16_t)(clamp<double>(i,-1,1)*INT16_MAX); //map to 16bit range & preserve symmetry (min = -32767)
+      out.write((char *)&j, sizeof(int16_t)); //write data
+    }
+    if (out.fail()){
+        cout << "File write error!\n";
+    }
+    out.close();
+    return 0;
+}
+
+int main() {
+    int oscCount = 0;
+    char another = 'y';
+    Osc osc;
+    while (another == 'y') {
+        oscCount ++;
+        cout << "Oscillator #" << oscCount << ':' << endl;
+        osc.init();
+        audioData.resize(max(audioData.size(), osc.oscData.size()));
+        //add osc data to the final audio data
+        transform(osc.oscData.begin(), osc.oscData.end(), audioData.begin(), audioData.begin(), plus<double>());
+        cout << "Add another oscillator? (y/n) ";
+        while(!(cin >> another) || !(another == 'y' || another == 'n')) {
+            cin.clear();
+            cin.ignore(1000, '\n');
+            cout << "Invalid input.\nAdd another oscillator? (y/n) ";
+        }
+}
+    string filename;
     cout << "File name? ";
     while (filename.length() == 0) {     
 	getline(cin, filename); 
@@ -180,7 +220,7 @@ int main() {
     filename += ".wav";
     makewav(filename);
     
-    cout << "Success! Press Enter to exit.";
-    getchar();
+//    cout << "Success! Press Enter to exit.";
+//    getchar();
     return 0;
 }
