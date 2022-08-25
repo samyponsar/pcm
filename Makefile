@@ -1,3 +1,4 @@
+all: pcm
 # on écrase la variable make CXX pour notre compilo
 CXX=		clang++
 # on veut que clang émette du code pour notre CPU seulement
