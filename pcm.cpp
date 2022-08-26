@@ -21,26 +21,6 @@ const int BITRATE = 16;
 
 vector<double> audioData; //final raw PCM data
 
-typedef struct WAV_HEADER {
-	/* RIFF Chunk Descriptor */
-	uint8_t RIFF[4] = { 'R', 'I', 'F', 'F' }; // RIFF Header Magic header
-	uint32_t ChunkSize = 0;                     // RIFF Chunk Size
-	uint8_t WAVE[4] = { 'W', 'A', 'V', 'E' }; // WAVE Header
-	/* "fmt" sub-chunk */
-	uint8_t fmt[4] = { 'f', 'm', 't', ' ' }; // FMT header
-	uint32_t Subchunk1Size = 16;           // Size of the fmt chunk
-	uint16_t AudioFormat = 1; // Audio format 1=PCM,6=mulaw,7=alaw,     257=IBM
-	// Mu-Law, 258=IBM A-Law, 259=ADPCM
-	uint16_t NumOfChan = CHANNELS;   // Number of channels 1=Mono 2=Stereo
-	uint32_t SamplesPerSec = SAMPLERATE;   // Sampling Frequency in Hz
-	uint32_t bytesPerSec = SAMPLERATE * (BITRATE/8); // bytes per second
-	uint16_t blockAlign = CHANNELS*(BITRATE/8);          // 2=16-bit mono, 4=16-bit stereo
-	uint16_t bitsPerSample = BITRATE;      // Number of bits per sample
-	/* "data" sub-chunk */
-	uint8_t Subchunk2ID[4] = { 'd', 'a', 't', 'a' }; // "data"  string
-	uint32_t Subchunk2Size = 0;                        // Sampled data length
-} wav_hdr;
-
 class Osc{
 
 		int mode = 0;
@@ -180,6 +160,25 @@ vector<double> Osc::sawr() {
 }
 
 int makewav(string filename) {
+	typedef struct WAV_HEADER {
+		/* RIFF Chunk Descriptor */
+		uint8_t RIFF[4] = { 'R', 'I', 'F', 'F' }; // RIFF Header Magic header
+		uint32_t ChunkSize = 0;                     // RIFF Chunk Size
+		uint8_t WAVE[4] = { 'W', 'A', 'V', 'E' }; // WAVE Header
+		/* "fmt" sub-chunk */
+		uint8_t fmt[4] = { 'f', 'm', 't', ' ' }; // FMT header
+		uint32_t Subchunk1Size = 16;           // Size of the fmt chunk
+		uint16_t AudioFormat = 1; // Audio format 1=PCM,6=mulaw,7=alaw,     257=IBM
+		// Mu-Law, 258=IBM A-Law, 259=ADPCM
+		uint16_t NumOfChan = CHANNELS;   // Number of channels 1=Mono 2=Stereo
+		uint32_t SamplesPerSec = SAMPLERATE;   // Sampling Frequency in Hz
+		uint32_t bytesPerSec = SAMPLERATE * (BITRATE / 8); // bytes per second
+		uint16_t blockAlign = CHANNELS * (BITRATE / 8);          // 2=16-bit mono, 4=16-bit stereo
+		uint16_t bitsPerSample = BITRATE;      // Number of bits per sample
+		/* "data" sub-chunk */
+		uint8_t Subchunk2ID[4] = { 'd', 'a', 't', 'a' }; // "data"  string
+		uint32_t Subchunk2Size = 0;                        // Sampled data length
+	} wav_hdr;
 	
 	uint32_t datasize = (uint32_t)(audioData.size()*(BITRATE/8));
 	wav_hdr wav;
