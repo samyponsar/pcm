@@ -19,30 +19,35 @@ static const int INT24_MAX = 8388607;
 
 class Audio {
 public:
-	static int CHANNELS;
-	static int SAMPLERATE;
-	static int BITRATE;
+	static unsigned int CHANNELS;
+	static unsigned int SAMPLERATE;
+	static unsigned int BITRATE;
 	vector<double> pcmData;
 	void set();
+	void sum(vector<double>);
 }audio;
 
-int Audio::CHANNELS = 1;
-int Audio::SAMPLERATE = 44100;
-int Audio::BITRATE = 24;
+unsigned int Audio::CHANNELS = 1;
+unsigned int Audio::SAMPLERATE = 44100;
+unsigned int Audio::BITRATE = 24;
 
 void Audio::set() {
-	//cout << "Channels? (1=mono | 2=stereo) ";
-	//while (!(cin >> CHANNELS) || !(CHANNELS == 1 || CHANNELS == 2)) {
-	//	cin.clear();
-	//	cin.ignore(1000, '\n');
-	//	cout << "Invalid input.\nChannels? (1=mono | 2=stereo) ";
-	//}
+
+	//TO DO:
+	cout << "Channels? (1=mono | 2=stereo) ";
+	while (!(cin >> CHANNELS) || !(CHANNELS == 1 || CHANNELS == 2)) {
+		cin.clear();
+		cin.ignore(1000, '\n');
+		cout << "Invalid input.\nChannels? (1=mono | 2=stereo) ";
+	}
+
 	cout << "Sample rate? (8000-352800 Hz) ";
 	while (!(cin >> SAMPLERATE) || SAMPLERATE < 8000 || SAMPLERATE > 352800) {
 		cin.clear();
 		cin.ignore(1000, '\n');
 		cout << "Invalid input.\nSample rate? (8000-352800 Hz) ";
 	}
+
 	cout << "Bit rate? (16 | 24) ";
 	while (!(cin >> BITRATE) || !(BITRATE == 16 || BITRATE == 24)) {
 		cin.clear();
@@ -51,10 +56,14 @@ void Audio::set() {
 	}
 }
 
+void Audio::sum(vector<double> other) {
+	pcmData.resize(max(other.size(), pcmData.size()));
+	transform(other.begin(), other.end(), pcmData.begin(), pcmData.begin(), plus<double>());
+}
+
 class Final : public Audio {
 public:
 	void makewav();
-	void sum(Audio);
 }final;
 
 void Final::makewav() {
@@ -122,22 +131,19 @@ void Final::makewav() {
 	}
 	out.close();
 }
-void Final::sum(Audio other) {
-	pcmData.resize(max(other.pcmData.size(), pcmData.size()));
-	transform(other.pcmData.begin(), other.pcmData.end(), pcmData.begin(), pcmData.begin(), plus<double>());
-}
 
 class Osc : public Audio {
-		int mode = 0, length = 0, preLength = 0;
-		double duration = 0, frequency = 1, amplitude = 0, preDelay = 0, period = 1;
+	int mode = 0;
+	unsigned int length = 0, preLength = 0;
+	double duration = 0, frequency = 1, amplitude = 0, preDelay = 0, period = 1;
 
-		vector<double> sine();
-		vector<double> triangle();
-		vector<double> square();
-		vector<double> saw();
-		vector<double> sawr();
-		vector<double> silence();
-		vector<double> noise();
+	vector<double> sine();
+	vector<double> triangle();
+	vector<double> square();
+	vector<double> saw();
+	vector<double> sawr();
+	vector<double> silence();
+	vector<double> noise();
 	public:
 		void set();
 }osc;
@@ -185,8 +191,8 @@ void Osc::set(){
 		}
 	}
 
-	length = (int)(duration * SAMPLERATE);
-	preLength = (int)(preDelay * SAMPLERATE);
+	length = (unsigned int)(duration * SAMPLERATE);
+	preLength = (unsigned int)(preDelay * SAMPLERATE);
 	period = (1 / frequency) * SAMPLERATE;
 
 	switch (mode) {
@@ -212,12 +218,33 @@ void Osc::set(){
 			pcmData = noise();
 			break;
 	}
+	if (CHANNELS==2){
+		vector<double> left = pcmData, right = pcmData;
+		double pan = 0;
+		pcmData.clear();
+		cout << "Pan? (-100(L) - 100(R)) ";
+		while (!(cin >> pan) || pan < -100 || pan > 100) {
+			cin.clear();
+			cin.ignore(1000, '\n');
+			cout << "Invalid input.\nPan? (-100(L) - 100(R)) ";
+		}
+		transform(left.begin(), left.end(), left.begin(),
+			[pan](double v){return v * ((clamp<double>(pan, 0, 100))-100) * -0.01;});
 
+		transform(right.begin(), right.end(), right.begin(),
+			[pan](double v){return v * ((clamp<double>(pan, -100, 0))+100) * 0.01;});
+
+		for (unsigned int x=0; x<min(left.size(), right.size()); x++){
+			pcmData.push_back(left[x]);
+			pcmData.push_back(right[x]);
+		}	
+	}
+	
 }
 
 vector<double> Osc::silence() {
 	vector<double> result(preLength, 0);
-	for (int x = 0; x < length; x++) {
+	for (unsigned int x = 0; x < length; x++) {
 		double samplevalue = 0;
 		result.push_back(samplevalue);
 	}
@@ -226,7 +253,7 @@ vector<double> Osc::silence() {
 
 vector<double> Osc::sine() {
 	vector<double> result(preLength, 0);
-	for (int x = 0; x < length; x ++) {
+	for (unsigned int x = 0; x < length; x ++) {
 		double samplevalue = sin((x*2*M_PI)/period) * amplitude;
 		result.push_back(samplevalue);
 	}
@@ -235,7 +262,7 @@ vector<double> Osc::sine() {
 
 vector<double> Osc::triangle() {
 	vector<double> result(preLength, 0);
-	for (int x = 0; x < length; x ++) {
+	for (unsigned int x = 0; x < length; x ++) {
 		double samplevalue = (4*amplitude/period)*abs(fmod((x+period-(period*0.25)),period)-(period*0.5))-amplitude;
 		result.push_back(samplevalue);
 	}
@@ -244,7 +271,7 @@ vector<double> Osc::triangle() {
 
 vector<double> Osc::square() {
 	vector<double> result(preLength, 0);
-	for (int x = 0; x < length; x ++) {
+	for (unsigned int x = 0; x < length; x ++) {
 		double samplevalue = sin((x*2*M_PI)/period);
 		samplevalue = ((samplevalue >= 0) - (samplevalue < 0)) * amplitude;
 		result.push_back(samplevalue);
@@ -254,7 +281,7 @@ vector<double> Osc::square() {
 
 vector<double> Osc::saw() {
 	vector<double> result(preLength, 0);
-	for (int x = 0; x < length; x ++) {
+	for (unsigned int x = 0; x < length; x ++) {
 		double samplevalue = (((fmod(x, period))/period)-0.5)*2*amplitude;
 		result.push_back(samplevalue);
 	}
@@ -263,7 +290,7 @@ vector<double> Osc::saw() {
 
 vector<double> Osc::sawr() {
 	vector<double> result(preLength, 0);
-	for (int x = 0; x < length; x ++) {
+	for (unsigned int x = 0; x < length; x ++) {
 		double samplevalue = -(((fmod(x, period))/period)-0.5)*2*amplitude;
 		result.push_back(samplevalue);
 	}
@@ -271,9 +298,9 @@ vector<double> Osc::sawr() {
 }
 
 vector<double> Osc::noise() {
-	srand((int) time(nullptr));
+	srand((unsigned int) time(nullptr));
 	vector<double> result(preLength, 0);
-	for (int x = 0; x < length; x++) {
+	for (unsigned int x = 0; x < length; x++) {
 		double samplevalue = ((rand() / (double)(RAND_MAX*0.5))-1)*amplitude;
 		result.push_back(samplevalue);
 	}
@@ -288,7 +315,7 @@ int main() {
 		oscCount ++;
 		cout << "Oscillator #" << oscCount << ':' << endl;
 		osc.set();
-		final.sum(osc);
+		final.sum(osc.pcmData);
 		cout << "Add another oscillator? (y/n) ";
 		while(!(cin >> another) || !(another == 'y' || another == 'n')) {
 			cin.clear();
