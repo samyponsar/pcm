@@ -27,13 +27,12 @@ public:
 	void sum(vector<double>);
 }audio;
 
-unsigned int Audio::CHANNELS = 1;
+unsigned int Audio::CHANNELS = 2;
 unsigned int Audio::SAMPLERATE = 44100;
 unsigned int Audio::BITRATE = 24;
 
 void Audio::set() {
 
-	//TO DO:
 	cout << "Channels? (1=mono | 2=stereo) ";
 	while (!(cin >> CHANNELS) || !(CHANNELS == 1 || CHANNELS == 2)) {
 		cin.clear();
